@@ -15,9 +15,16 @@
 apt update -y && apt install git -y
 git clone https://github.com/pahami/mdadm.git
 
-Создаём виртуальную машину. Для создания используем подготовленный Vagrantfile:
+2) Создаём виртуальную машину. Для создания используем подготовленный Vagrantfile:
 
 vagrant up
+
+Чтобы проверить, что все настроено заходим на виртуальную машину и выполняем команды:
+
+vagrant ssh
+sudo -i
+cat /proc/mdstat
+cat /etc/mdadm/mdadm.conf
 
 Для проверки правильности шаблона ansible можно использовать ключ --check
 
