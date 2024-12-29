@@ -1,0 +1,91 @@
+---
+- name: Create mdadm raid 5 on Ubuntu
+  hosts: testmdadm
+  become: yes
+  vars:
+    disk0: sdb
+    disk1: sdc
+    disk2: sdd
+    disk3: sde
+    disk4: sdf
+    raid_name: md5
+    mount_point: /mnt/raid5
+
+  tasks  :    
+    - name: Update repositories cache and apt
+      ansible.builtin.apt:
+        update_cache: yes
+      tags: 
+        -update apt
+      become : yes
+
+    - name: Install mdadm
+      ansible.builtin.apt:
+        name: mdadm
+        state: latest
+      become : yes
+
+    - name: prepare disks for raid (make zero-superblocks)
+      ansible.builtin.shell: "mdadm --zero-superblock /dev/{{ disk0 }} /dev/{{ disk1 }} /dev/{{ disk2 }} /dev/{{ disk3 }} /dev/{{ disk4 }}"
+      become : yes
+
+    - name: Create RAID 5
+      command: "mdadm --create /dev/{{ raid_name }} -l 5 -n 5 /dev/{{ disk0 }} /dev/{{ disk1 }} /dev/{{ disk2 }} /dev/{{ disk3 }} /dev/{{ disk4 }}"
+      args:
+        creates: "/dev/{{ raid_name }}"
+      become : yes
+
+    - name: Pause 10 seconds
+      ansible.builtin.pause:
+        seconds: 10
+      become: yes
+
+    - name: Create ext4 filesystem on raid
+      ansible.builtin.filesystem:
+        fstype: ext4
+        dev: "/dev/{{ raid_name }}"
+      become: yes
+
+    - name: Create mount point for raid
+      ansible.builtin.file:
+        path: "{{ mount_point }}"
+        state: directory
+      become: yes
+
+    - name: Mount raid to mnt point
+      ansible.builtin.mount:
+        path: "{{ mount_point }}"
+        src: "/dev/{{ raid_name }}"
+        fstype: ext4
+        state: mounted
+      become: yes
+
+    - name: Save mdadm --detail --scan command result to var
+      ansible.builtin.shell: mdadm --detail --scan
+      register: mdadm_conf
+      become: yes
+
+    - name: Add linefiles to /etc/mdadm/mdadm.conf
+      ansible.builtin.lineinfile:
+        path: /etc/mdadm/mdadm.conf
+        line: "DEVICE partitions"
+      become: yes
+
+    - name: Add linefiles to /etc/mdadm/mdadm.conf
+      ansible.builtin.lineinfile:
+        path: /etc/mdadm/mdadm.conf
+        line: "{{ mdadm_conf.stdout }}"
+      become: yes
+
+    - name: Update initial ram file system
+      ansible.builtin.shell: update-initramfs -u
+      become: yes
+
+    - name: Add raid mount point to /etc/fstab
+      ansible.builtin.mount:
+        path: "{{ mount_point }}"
+        src: "/dev/{{ raid_name }}"
+        fstype: ext4
+        opts: defaults
+        state: present
+      become: yes
